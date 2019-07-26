@@ -1,0 +1,18 @@
+[package]
+name = "wasmtime-embed-workspace"
+version = "1.0.0"
+authors = []
+edition = "2018"
+
+[workspace]
+
+members = [
+  "wasmtime-embed",
+  "wasmtime-embed-macro",
+]
+
+[dependencies]
+failure = { version = "0.1.3", default-features = false }
+wasmtime-embed = { path = "wasmtime-embed" }
+wasmtime-embed-macro = { path = "wasmtime-embed-macro" }
+wasi-common = { git = "https://github.com/CraneStation/wasi-common" }

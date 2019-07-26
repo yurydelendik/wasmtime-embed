@@ -1,0 +1,16 @@
+*.bk
+*.swp
+*.swo
+*.swx
+tags
+target
+Cargo.lock
+.*.rustfmt
+cranelift.dbg*
+rusty-tags.*
+*~
+\#*\#
+
+l1.*
+gcd.*
+hello.*
