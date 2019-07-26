@@ -2,8 +2,13 @@ use crate::context::{create_context, ContextToken};
 use cranelift_codegen::ir;
 use failure::Error;
 use std::collections::HashSet;
+use std::rc::Rc;
 use wasmtime_jit::{ActionOutcome, RuntimeValue};
-use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
+use wasmtime_runtime::{Imports, Export, InstanceHandle, VMContext, VMFunctionBody};
+use std::any::Any;
+use cranelift_entity::{PrimaryMap, BoxedSlice};
+use cranelift_wasm::DefinedFuncIndex;
+use wasmtime_environ::Module;
 
 #[derive(Clone)]
 pub struct InstanceToken {
@@ -34,6 +39,36 @@ impl InstanceToken {
             instance_handle: handle,
             contexts: HashSet::new(),
         }
+    }
+
+    pub fn from_raw_parts(
+        module: Module, 
+        finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
+        state: Box<dyn Any>
+    ) -> InstanceToken {
+        let imports = Imports::none();
+        let data_initializers = Vec::new();
+        let signatures = PrimaryMap::new();
+
+        let mut context = ContextToken::create();
+        let global_exports = context.context().get_global_exports();
+
+        let mut contexts = HashSet::new();
+        contexts.insert(context);
+
+        InstanceToken::new(
+            InstanceHandle::new(
+                Rc::new(module),
+                global_exports,
+                finished_functions,
+                imports,
+                &data_initializers,
+                signatures.into_boxed_slice(),
+                None,
+                state
+            ).expect("handle"),
+            contexts
+        )
     }
 }
 

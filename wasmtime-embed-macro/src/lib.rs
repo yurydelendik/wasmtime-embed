@@ -307,24 +307,6 @@ pub fn wasm_import(attr: TokenStream, item: TokenStream) -> TokenStream {
     let extra_mod_name = format!("_{}_wasm_import", ast.ident.clone());
     let extra_mod_indent = Ident::new(&extra_mod_name, Span::call_site());
 
-    let wrap_defs = quote! {
-        use ::wasmtime_embed::{ContextToken, InstanceToken};
-        use ::wasmtime_embed::extra::{
-            Export, Module, Imports, InstanceHandle, InstantiationError, VMFunctionBody,
-            ir, isa, PrimaryMap, DefinedFuncIndex,
-        };
-        use ::std::rc::Rc;
-        use ::std::cell::RefCell;
-
-        let mut context = ContextToken::create();
-        let imports = Imports::none();
-        let data_initializers = ::std::vec::Vec::new();
-        let signatures = PrimaryMap::new();
-        let global_exports = context.context().get_global_exports();
-        let mut finished_functions = PrimaryMap::new();
-        let mut module = Module::new();
-    };
-
     let mut definitions = TokenStream2::new();
     let mut wrapper_methods = TokenStream2::new();
     for item in &ast.items {
@@ -343,33 +325,28 @@ pub fn wasm_import(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let wrap_return = quote! {
-        let mut contexts = ::std::collections::HashSet::new();
-        contexts.insert(context);
-        InstanceToken::new(
-            InstanceHandle::new(
-                Rc::new(module),
-                global_exports,
-                finished_functions.into_boxed_slice(),
-                imports,
-                &data_initializers,
-                signatures.into_boxed_slice(),
-                None,
-                ::std::boxed::Box::new(#extra_mod_indent :: State {
-                    subject: RefCell::new(::std::boxed::Box::new(subject))
-                }),
-            ).expect("handle"),
-            contexts
-        )
-    };
-
     let wrap_method = TokenStream::from(quote! {
         fn wrap_wasm_imports<T: #trait_ident + 'static>(
             subject: T
         ) -> ::wasmtime_embed::InstanceToken where Self: Sized {
-            #wrap_defs
+            use ::wasmtime_embed::extra::{
+                ir, isa, Export, Module, PrimaryMap, VMFunctionBody,
+            };
+            use ::std::boxed::Box;
+            use ::std::cell::RefCell;
+
+            let mut finished_functions = PrimaryMap::new();
+            let mut module = Module::new();
+            
             #definitions
-            #wrap_return
+
+            InstanceToken::from_raw_parts(
+                module,
+                finished_functions.into_boxed_slice(),
+                Box::new(#extra_mod_indent :: State {
+                    subject: RefCell::new(Box::new(subject))
+                })
+            )
         }
     });
     ast.items.extend(parse::<TraitItem>(wrap_method));
@@ -378,10 +355,12 @@ pub fn wasm_import(attr: TokenStream, item: TokenStream) -> TokenStream {
         #vis mod #extra_mod_indent {
             use ::wasmtime_embed::{InstanceToken, WasmExport, InstanceCallableExport};
             use ::wasmtime_embed::extra::{VMContext, VMFunctionBody, ir, isa};
+            use ::std::boxed::Box;
+            use ::std::cell::RefCell;
 
             pub (super) struct State {
-                pub subject: ::std::cell::RefCell<
-                    ::std::boxed::Box<dyn super::#trait_ident + 'static>
+                pub subject: RefCell<
+                    Box<dyn super::#trait_ident + 'static>
                 >,
             }
             unsafe fn get_state<'a>(vmctx: *mut VMContext) -> &'a mut State {
