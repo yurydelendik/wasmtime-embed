@@ -46,28 +46,38 @@ fn read_binary(path: &str) -> Result<Vec<u8>, Error> {
 }
 
 fn main() -> Result<(), Error> {
+    // Instantiate gcd.wasm without imports
     let gcd_wasm = read_binary("gcd.wasm")?;
     let instance = instantiate(&gcd_wasm, HashMap::new())?;
 
+    // "Map" `Test` trait to instance
     let t = wasm_export_impl!(instance as Test);
+    // Direct call of wasm's `gcd` (no late binding)
     println!("gcd(6, 27) = {} (via Test)", t.gcd(6, 27));
 
+    // Late binding
     let gcd = instance.get_export("gcd").expect("gcd test");
     let res = gcd.invoke(&[RuntimeValue::I32(6), RuntimeValue::I32(27)])?;
     println!("gcd(6, 27) = {}", res[0]);
 
+    // InstanceHandle for wrapped Rust struct (TestCallback trait)
     let callback_host = TestCallbackC::new();
     let l0 = wasm_import_wrapper!(callback_host for <TestCallbackC as TestCallback>);
 
+    // Instantiate l1.wasm with "test" and "gcd" imports. The former is Rust object
+    // and the latter is wasm module. Communication using direct calls.
     let l1_wasm = read_binary("l1.wasm")?;
     let mut l1_imports = HashMap::new();
     l1_imports.insert(String::from("test"), ImportSet::InstanceExports(l0));
     l1_imports.insert(String::from("gcd"), ImportSet::InstanceExports(instance));
     let _l1 = instantiate(&l1_wasm, l1_imports)?;
 
+    // For wasi, we need the same context (just to have a common "memory").
     let context = ContextToken::create();
 
+    // Instantiate WASI (as InstanceHandle)
     let wasi = build_wasi(&context);
+    // Instantiate hello.wasm with wasi as import (in the same context).
     let hello_wasm = read_binary("hello.wasm")?;
     let mut hello_imports = HashMap::new();
     hello_imports.insert(
@@ -76,6 +86,7 @@ fn main() -> Result<(), Error> {
     );
     let hello = instantiate_in_context(&hello_wasm, hello_imports, context)?;
 
+    // Accessing memory slice (example).
     let memory = hello.get_export("memory").expect("memory");
     unsafe {
         let data: &[u8] = memory.get_memory_slice_mut(100000, 100, 1)?;
