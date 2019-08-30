@@ -290,7 +290,7 @@ fn wrap_method(
     });
     wrapper_methods.extend(quote! {
         pub (super) #sig {
-            get_state(vmctx).subject.borrow().callback(#call_passthru_params)
+            get_state(vmctx).subject.borrow().#method_name(#call_passthru_params)
         }
     });
 }
